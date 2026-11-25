@@ -7,6 +7,7 @@ use App\Models\Submission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SubmissionController extends Controller
@@ -61,7 +62,27 @@ class SubmissionController extends Controller
         // 2. Validasi input 'nilai' (required|integer|min:0|max:100) dan 'catatan_dosen' (nullable|string|max:1000).
         // 3. Simpan perubahan menggunakan $submission->update(...) dan redirect back() dengan pesan sukses.
 
-        abort(501, 'Fitur belum diimplementasikan');
+        if ($submission->assignment->course->dosen_id !== Auth::id()) {
+            abort(403, 'Akses ditolak. Anda bukan dosen pengampu mata kuliah ini.');
+        }
+
+        $validated = $request->validate([
+            'nilai' => ['required', 'integer', 'min:0', 'max:100'],
+            'catatan_dosen' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'nilai.required' => 'Nilai wajib diisi.',
+            'nilai.integer' => 'Nilai harus berupa angka bulat.',
+            'nilai.min' => 'Nilai minimal adalah 0.',
+            'nilai.max' => 'Nilai maksimal adalah 100.',
+            'catatan_dosen.max' => 'Catatan dosen maksimal 1.000 karakter.',
+        ]);
+
+        $submission->update([
+            'nilai' => $validated['nilai'],
+            'catatan_dosen' => $validated['catatan_dosen'],
+        ]);
+
+        return back()->with('success', "Nilai untuk mahasiswa {$submission->user->name} berhasil disimpan.");
     }
 
     public function exportCsv(Assignment $assignment): StreamedResponse
@@ -71,6 +92,57 @@ class SubmissionController extends Controller
         // 2. Muat relasi course.approvedStudents dan submissions dari $assignment.
         // 3. Kembalikan response()->streamDownload(...) yang menulis header & baris CSV menggunakan fopen('php://output', 'w') dan fputcsv().
 
-        abort(501, 'Fitur belum diimplementasikan');
+        if ($assignment->course->dosen_id !== Auth::id()) {
+            abort(403, 'Akses ditolak. Anda bukan dosen pengampu mata kuliah ini.');
+        }
+
+        $assignment->load([
+            'course.approvedStudents' => fn($q) => $q->orderBy('name'),
+            'submissions',
+        ]);
+
+        $fileName = 'rekap-nilai-' . Str::slug($assignment->course->kode_mk . '-' . $assignment->judul) . '.csv';
+
+        return response()->streamDownload(function () use ($assignment) {
+            $handle = fopen('php://output', 'w');
+
+            // Tambahkan BOM UTF-8 agar karakter terbaca rapi saat dibuka di Microsoft Excel
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // Header kolom CSV
+            fputcsv($handle, [
+                'No',
+                'NIM',
+                'Nama Mahasiswa',
+                'Email',
+                'Status Pengumpulan',
+                'Waktu Pengumpulan',
+                'Nilai',
+                'Status Kelulusan',
+                'Catatan Dosen',
+            ]);
+
+            $submissionsByUser = $assignment->submissions->keyBy('user_id');
+
+            foreach ($assignment->course->approvedStudents as $index => $student) {
+                $submission = $submissionsByUser->get($student->id);
+
+                fputcsv($handle, [
+                    $index + 1,
+                    $student->nomor_induk ?? '-',
+                    $student->name,
+                    $student->email,
+                    $submission ? 'Sudah Mengumpulkan' : 'Belum Mengumpulkan',
+                    $submission && $submission->submitted_at ? $submission->submitted_at->format('Y-m-d H:i:s') : '-',
+                    $submission && !is_null($submission->nilai) ? $submission->nilai : '-',
+                    $submission ? $submission->status_nilai : 'Belum Mengumpulkan',
+                    $submission->catatan_dosen ?? '-',
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 }
