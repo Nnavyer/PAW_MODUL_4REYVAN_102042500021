@@ -113,8 +113,8 @@
                                         <i class="bi bi-search text-muted"></i>
                                     </span>
                                     <input type="text" name="search" class="form-control border-start-0" 
-                                           placeholder="Cari judul, penulis..." 
-                                           value="{{ request('search') }}">
+                                        placeholder="Cari judul, penulis..." 
+                                        value="{{ request('search') }}">
                                 </div>
                             </div>
 

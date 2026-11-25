@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 class BukuController extends Controller
 {
     /**
-     * Menampilkan daftar semua buku untuk admin dengan fitur pencarian, filter, dan sorting.
+- Menampilkan daftar semua buku untuk admin dengan fitur pencarian, filter, dan sorting.
      */
     public function index(Request $request)
     {
@@ -71,7 +71,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Menampilkan form tambah buku baru.
+- Menampilkan form tambah buku baru.
      */
     public function create()
     {
@@ -79,7 +79,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Menyimpan buku baru beserta berkas sampul ke storage.
+- Menyimpan buku baru beserta berkas sampul ke storage.
      */
     public function store(Request $request)
     {
@@ -90,6 +90,7 @@ class BukuController extends Controller
             'tahun_terbit' => 'required|integer',
             'stok'         => 'required|integer|min:0',
             // TODO 4: Tambahkan validasi untuk berkas 'cover' (nullable|image|mimes:jpeg,png,jpg|max:2048)
+            'cover'        => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ], [
             'judul.required'        => 'Judul buku wajib diisi.',
             'judul.max'             => 'Judul buku maksimal 100 karakter.',
@@ -109,6 +110,9 @@ class BukuController extends Controller
 
         // TODO 4: Periksa jika ada berkas 'cover' yang diunggah ($request->hasFile('cover')),
         // simpan berkas ke disk 'public' folder 'buku', dan masukkan path-nya ke $validated['cover']
+        if ($request->hasFile('cover')) {
+            $validated['cover'] = $request->file('cover')->store('buku', 'public');
+        }
 
         Buku::create($validated);
 
@@ -117,7 +121,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Menampilkan detail buku.
+- Menampilkan detail buku.
      */
     public function show(Buku $buku)
     {
@@ -127,7 +131,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Menampilkan form edit buku.
+- Menampilkan form edit buku.
      */
     public function edit(Buku $buku)
     {
@@ -135,7 +139,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Memperbarui data buku dan mengganti berkas sampul lama.
+- Memperbarui data buku dan mengganti berkas sampul lama.
      */
     public function update(Request $request, Buku $buku)
     {
@@ -146,6 +150,7 @@ class BukuController extends Controller
             'tahun_terbit' => 'required|integer',
             'stok'         => 'required|integer|min:0',
             // TODO 4: Tambahkan validasi untuk berkas 'cover' (nullable|image|mimes:jpeg,png,jpg|max:2048)
+            'cover'        => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ], [
             'judul.required'        => 'Judul buku wajib diisi.',
             'judul.max'             => 'Judul buku maksimal 100 karakter.',
@@ -166,6 +171,12 @@ class BukuController extends Controller
         // TODO 5: Periksa jika ada berkas 'cover' baru yang diunggah:
         // 1. Hapus berkas cover fisik lama dari Storage::disk('public') jika ada
         // 2. Simpan berkas cover baru ke folder 'buku' pada disk 'public' dan simpan ke $validated['cover']
+        if ($request->hasFile('cover')) {
+            if ($buku->cover && Storage::disk('public')->exists($buku->cover)) {
+                Storage::disk('public')->delete($buku->cover);
+            }
+            $validated['cover'] = $request->file('cover')->store('buku', 'public');
+        }
 
         $buku->update($validated);
 
@@ -174,7 +185,7 @@ class BukuController extends Controller
     }
 
     /**
-     * Menghapus buku beserta berkas fisik gambar sampulnya dari database dan storage.
+- Menghapus buku beserta berkas fisik gambar sampulnya dari database dan storage.
      */
     public function destroy(Buku $buku)
     {
@@ -186,6 +197,9 @@ class BukuController extends Controller
         }
 
         // TODO 6: Hapus berkas fisik 'cover' dari Storage::disk('public') sebelum record buku dihapus jika data cover ada
+        if ($buku->cover && Storage::disk('public')->exists($buku->cover)) {
+            Storage::disk('public')->delete($buku->cover);
+        }
 
         $buku->delete();
 
